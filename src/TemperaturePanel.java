@@ -5,8 +5,6 @@ import java.awt.event.ActionListener;
 import java.io.PrintWriter;
 import java.util.*;
 import java.util.List;
-import java.util.function.ToDoubleBiFunction;
-
 import javax.swing.*;
 
 import com.twilio.Twilio;
@@ -28,14 +26,10 @@ public class TemperaturePanel {
     public static int inputHigh;
     private static char fctemp='c';
     static SerialPort chosenPort;
-    private JTextField readLow;
-    private JTextField readHigh;
-    private JTextField readCellNumber;
-    private JButton connectButton;
-    private JButton FButton;
-    private JButton CButton;
-    private JButton LEDButton;
+    private JTextField readLow, readHigh, readCellNumber, highTemp, lowTemp;
+    private JButton connectButton, FButton, CButton, LEDButton;
     JComboBox<String> portList;
+
 
     //LinkedList<Double> fifo = new LinkedList<Double>(Arrays.asList(0.0,1.0));
     MySwingWorker mySwingWorker;
@@ -50,21 +44,17 @@ public class TemperaturePanel {
 
     private void go() {
 
-        // Create Chart
-//        chart = QuickChart.getChart("SwingWorker XChart Real-time Demo", "Time", "Value", "randomWalk", new double[] { 0 }, new double[] { 0 });
-//        chart.getStyler().setLegendVisible(false);
-//        chart.getStyler().setXAxisTicksVisible(false);
-
-        //JFrame tFrame = new JFrame("Test");
+        JPanel topPanel = new JPanel();
         // create a drop-down box and connect button, then place them at the top of the window
         portList = new JComboBox<>();
+
+        TmpButtonHandler btnHandler = new TmpButtonHandler();
+
         connectButton = new JButton("Connect");
-        connectButton.addActionListener(new ConnectButtonHandler());
+        connectButton.addActionListener(btnHandler);
         FButton = new JButton("F");
         CButton = new JButton("C");
         LEDButton = new JButton("LED");
-
-        JPanel topPanel = new JPanel();
 
         topPanel.add(portList);
         topPanel.add(connectButton);
@@ -74,29 +64,19 @@ public class TemperaturePanel {
 
         // populate the drop-down box
         SerialPort[] portNames = SerialPort.getCommPorts();
+
         for(int i = 0; i < portNames.length; i++)
-            portList.addItem(portNames[i].getSystemPortName());
+            portList.addItem(portNames[i].getDescriptivePortName());
 
-        JTextField lowTemp = new JTextField();
-
-
-        JTextArea textLowTemp = new JTextArea("Lowest Temperature");
-        textLowTemp.setEditable(false);
+        lowTemp = new JTextField();
+        JLabel textLowTemp = new JLabel("Lowest Temperature");
         readLow = new JTextField(5);
 
         topPanel.add(textLowTemp);
         topPanel.add(readLow);
 
-        readLow.addActionListener(e -> {
-            inputLow = Integer.parseInt(readLow.getText());
-            lowTemp.setText(Integer.toString(inputLow));
-        });
-
-        JTextField highTemp = new JTextField();
-
-
-        JTextArea textHighTemp = new JTextArea("Highest Temperature");
-        textHighTemp.setEditable(false);
+        highTemp = new JTextField();
+        JLabel textHighTemp = new JLabel("Highest Temperature");
         readHigh = new JTextField(5);
 
         topPanel.add(textHighTemp);
@@ -280,12 +260,10 @@ public class TemperaturePanel {
 //            }
 //        });
 
-
                 /************************
                  This begins the chart creation process.
                  ***********************/
                 tChart = buildPanel();
-
 
                 javax.swing.SwingUtilities.invokeLater(new Runnable() {
 
@@ -304,7 +282,6 @@ public class TemperaturePanel {
                     }
                 });
 
-
                 // Show it
 //        sw = new SwingWrapper<XYChart>(chart);
 //        sw.displayChart();
@@ -318,16 +295,30 @@ public class TemperaturePanel {
     /*
     This class handles what happens when the connect button is pressed.
      */
-    private class ConnectButtonHandler implements ActionListener {
+    private class TextHandler implements ActionListener {
+        public void actionPerformed(ActionEvent e) {
+            if (e.getSource() == readHigh) {
+                inputHigh = Integer.parseInt(readHigh.getText());
+                highTemp.setText(Integer.toString(inputHigh));
+            }
+            else if(e.getSource() == readLow){
+                inputLow = Integer.parseInt(readLow.getText());
+                lowTemp.setText(Integer.toString(inputLow));
+            }
+        }
+    }
+    private class TmpButtonHandler implements ActionListener {
         public void actionPerformed(ActionEvent e) {
             if (connectButton.getText().equals("Connect")) {
                 // attempt to connect to the serial port
+
                 chosenPort = SerialPort.getCommPort(portList.getSelectedItem().toString());
                 chosenPort.setComPortTimeouts(SerialPort.TIMEOUT_SCANNER, 0, 0);
                 if (chosenPort.openPort()) {
                     connectButton.setText("Disconnect");
                     portList.setEnabled(false);
                 }
+
                 //////////////////////////////////////////////////////////
                 Twilio.init(ACCOUNT_SID, AUTH_TOKEN);
 
@@ -355,7 +346,6 @@ public class TemperaturePanel {
 
         public MySwingWorker() {
 
-
             //fifo.add(-1.0);
             //fifoX.add(0.0);
 
@@ -372,9 +362,7 @@ public class TemperaturePanel {
                 int oneText = 0;
                 int startConn=0;
 
-
                 while(scanner.hasNextLine()) {
-
 
                     try {
                         if(startConn==0){
@@ -390,7 +378,6 @@ public class TemperaturePanel {
 //                            }
                             startConn=1;
                         }
-
 
                         String line = scanner.nextLine();
                         double number = Double.parseDouble(line);
@@ -419,24 +406,23 @@ public class TemperaturePanel {
                         //sensorData.remove();
                         //series.clear();
 
-                        if(FButton.getModel().isPressed()){
-                            fctemp='f';
-                        }
-                        if(CButton.getModel().isPressed()){
-                            fctemp='c';
-                        }
-                        if(fctemp=='c' && number >= -125){
-
-                            chart.setTitle(Double.toString(number) + " Degrees");
-
-                        }
-                        else if (fctemp == 'f' && number >= -125){
-                            chart.setTitle(Double.toString(number*1.8+32) + " Degrees");
-                        }
-                        else {
-                            chart.setTitle("Unplugged Sensor");
-                        }
-
+//                        if(FButton.getModel().isPressed()){
+//                            fctemp='f';
+//                        }
+//                        if(CButton.getModel().isPressed()){
+//                            fctemp='c';
+//                        }
+//                        if(fctemp=='c' && number >= -125){
+//
+//                            chart.setTitle(Double.toString(number) + " Degrees");
+//
+//                        }
+//                        else if (fctemp == 'f' && number >= -125){
+//                            chart.setTitle(Double.toString(number*1.8+32) + " Degrees");
+//                        }
+//                        else {
+//                            chart.setTitle("Unplugged Sensor");
+//                        }
 
                         if(LEDButton.getModel().isPressed()){
                             PrintWriter output=new PrintWriter(chosenPort.getOutputStream());
@@ -482,7 +468,6 @@ public class TemperaturePanel {
                             System.out.println("MySwingWorker shut down.");
                         }
 
-
                         //window.repaint();
                     } catch(Exception e) {
                     }
@@ -490,8 +475,6 @@ public class TemperaturePanel {
                 }
                 scanner.close();
             }
-
-
 /*
     Use to reference random data input into graph for further debugging.
  */
@@ -552,7 +535,6 @@ public class TemperaturePanel {
 
         }
     }
-
 
     public XYChart getChart() {
         chart = QuickChart.getChart("SwingWorker XChart Real-time Demo", "Time (s)", "Temperature", "randomWalk", new double[] { 0 }, new double[] { 0 });
