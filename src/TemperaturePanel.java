@@ -2,15 +2,20 @@
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.*;
 import java.util.List;
 import javax.swing.*;
 
 import com.twilio.Twilio;
+import com.twilio.exception.ApiException;
+import com.twilio.exception.TwilioException;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
 import org.knowm.xchart.*;
+import org.knowm.xchart.style.Styler;
 import org.knowm.xchart.style.markers.SeriesMarkers;
 import com.fazecast.jSerialComm.SerialPort;
 
@@ -24,11 +29,13 @@ public class TemperaturePanel {
     public static final int HIGHEST_TEMPERATURE = 50;
     public static int inputLow;
     public static int inputHigh;
-    private static char fctemp='c';
+    private static char fctemp = 'c';
     static SerialPort chosenPort;
     private JTextField readLow, readHigh, readCellNumber, highTemp, lowTemp;
     private JButton connectButton, FButton, CButton, LEDButton;
-    JComboBox<String> portList;
+    private JComboBox<String> portList;
+    private PrintWriter output;
+    private boolean changedToF = false;
 
 
     //LinkedList<Double> fifo = new LinkedList<Double>(Arrays.asList(0.0,1.0));
@@ -49,12 +56,14 @@ public class TemperaturePanel {
         portList = new JComboBox<>();
 
         TmpButtonHandler btnHandler = new TmpButtonHandler();
+        TextHandler txtFieldHandler = new TextHandler();
 
         connectButton = new JButton("Connect");
         connectButton.addActionListener(btnHandler);
         FButton = new JButton("F");
         CButton = new JButton("C");
-        LEDButton = new JButton("LED");
+        LEDButton = new JButton("LED OFF");
+        LEDButton.addActionListener(btnHandler);
 
         topPanel.add(portList);
         topPanel.add(connectButton);
@@ -65,8 +74,8 @@ public class TemperaturePanel {
         // populate the drop-down box
         SerialPort[] portNames = SerialPort.getCommPorts();
 
-        for(int i = 0; i < portNames.length; i++)
-            portList.addItem(portNames[i].getDescriptivePortName());
+        for (int i = 0; i < portNames.length; i++)
+            portList.addItem(portNames[i].getSystemPortName());
 
         lowTemp = new JTextField();
         JLabel textLowTemp = new JLabel("Lowest Temperature");
@@ -81,16 +90,10 @@ public class TemperaturePanel {
 
         topPanel.add(textHighTemp);
         topPanel.add(readHigh);
-
-        readHigh.addActionListener(e -> {
-            inputHigh = Integer.parseInt(readHigh.getText());
-            highTemp.setText(Integer.toString(inputHigh));
-        });
+        readHigh.addActionListener(txtFieldHandler);
 
         //User input cell phone number
-        //JTextField phoneNumber = new JTextField();
-        JTextArea textPhoneNumber = new JTextArea("Cell Number");
-        textPhoneNumber.setEditable(false);
+        JLabel textPhoneNumber = new JLabel("Cell Number");
         readCellNumber = new JTextField(10);
 
         topPanel.add(textPhoneNumber);
@@ -102,196 +105,31 @@ public class TemperaturePanel {
             phoneNumber.setText(Integer.toString(inputCellPhone));
         });*/
 
-        //START A WHILE LOOP FOR THE USER INPUT INTO TEMPERATURE RANGES AND CELL NUMBER
+        /* Old Outdated code snippet for reference*/
 
+        /************************
+         This begins the chart creation process.
+         ***********************/
+        tChart = buildPanel();
 
-/* Old Outdated code snippet for reference*/
-//         configure the connect button and use another thread to listen for data
-//        connectButton.addActionListener(arg0 -> {
-//            if (connectButton.getText().equals("Connect")) {
-//                // attempt to connect to the serial port
-//                chosenPort = SerialPort.getCommPort(portList.getSelectedItem().toString());
-//                chosenPort.setComPortTimeouts(SerialPort.TIMEOUT_SCANNER, 0, 0);
-//                if (chosenPort.openPort()) {
-//                    connectButton.setText("Disconnect");
-//                    portList.setEnabled(false);
-//                }
-//                //////////////////////////////////////////////////////////
-//                Twilio.init(ACCOUNT_SID, AUTH_TOKEN);
-//
-//                Message message = Message
-//                        .creator(new PhoneNumber(readCellNumber.getText()), new PhoneNumber("+16182668109"), // To: , From: respectively
-//                                "Sensor connected.").create();
-//
-//                System.out.println(message.getSid());
-//                mySwingWorker = new MySwingWorker();
-//                mySwingWorker.execute();
-//
-//                //////////////////////////////////////////////////////////////
-//
-//                 create a new thread that listens for incoming text and populates the graph
-//                Thread thread = new Thread(() -> {
-//                    LinkedList<Integer> sensorData= new LinkedList();
-//                    for(int i=0; i<300; i++){
-//
-//                        sensorData.add(0);
-//                    }
-//
-//                    Scanner scanner = new Scanner(chosenPort.getInputStream());
-//                    int oneText = 0;
-//                    int startConn=0;
-//
-//
-//                    while(scanner.hasNextLine()) {
-//
-//
-//                        try {
-//                            if(startConn==0){
-//                                PrintWriter output=new PrintWriter(chosenPort.getOutputStream());
-//                                output.print('s');
-//                                output.flush();
-//                                for(int i=0; i<300; i++){
-//                                    String line = scanner.nextLine();
-//                                    int number = Integer.parseInt(line);
-//                                    //sensorData.add(number);
-//                                    //sensorData.remove();
-//                                }
-//                                startConn=1;
-//                            }
-//
-//
-//                            String line = scanner.nextLine();
-//                            int number = Integer.parseInt(line);
-//                            inputHigh = Integer.parseInt(readHigh.getText());
-//                            inputLow = Integer.parseInt(readLow.getText());
-//
-//                            System.out.printf("high temp %d\n", h);
-//                            System.out.printf("low temp %d\n", l);
-//                            System.out.printf("readlow: %s\n", readLow.getText());
-//                            System.out.printf("readhigh: %s\n", readHigh.getText());
-//
-//                            if (number >= inputHigh && oneText == 0 && number <= 65){
-//                                Message message1 = Message
-//                                        .creator(new PhoneNumber(readCellNumber.getText()), new PhoneNumber("+16182668109"), // To: , From: respectively
-//                                                "WARNING: TEMPERATURE RANGE HAS EXCEEDED REQUIRED TEMPERATURE").create();
-//                                oneText++;
-//                            }
-//                            if (number <= inputLow && oneText == 0 && number >= -20){
-//                                Message message1 = Message
-//                                        .creator(new PhoneNumber(readCellNumber.getText()), new PhoneNumber("+16182668109"), // To: , From: respectively
-//                                                "WARNING: TEMPERATURE RANGE HAS FALLEN BELOW REQUIRED TEMPERATURE").create();
-//                                oneText++;
-//                            }
-//
-//                            //sensorData.add(number);
-//                            //sensorData.remove();
-//                            //series.clear();
-//
-//                            if(FButton.getModel().isPressed()){
-//                                fctemp='f';
-//                            }
-//                            if(CButton.getModel().isPressed()){
-//                                fctemp='c';
-//                            }
-//                            if(fctemp=='c' && number >= -125){
-//
-//                                chart.setTitle(Integer.toString(number) + " Degrees");
-//
-//                            }
-//                            else if (fctemp == 'f' && number >= -125){
-//                                chart.setTitle(Double.toString(number*1.8+32) + " Degrees");
-//                            }
-//                            else {
-//                                chart.setTitle("Unplugged Sensor");
-//                            }
-//
-//
-//                            if(LEDButton.getModel().isPressed()){
-//                                PrintWriter output=new PrintWriter(chosenPort.getOutputStream());
-//                                output.print('o');
-//                                output.flush();
-//                            }
-//
-//                            for(int i=-0;i<300; i++){
-//                                int y=i;
-//
-//
-//                                int x=i;
-//                                if(y>-50&&y<120){
-//                                    //series.add(300-x,y);
-//                                }
-//                                else{
-//                                    //series.add(300-x, null);
-//                                }
-//                            }
-//
-//
-//                            //window.repaint();
-//                        } catch(Exception e) {
-//                        }
-//
-//                    }
-//                    scanner.close();
-//                });
-//                thread.start();
-//            } else {
-//                // disconnect from the serial port & check for user inputs
-//                System.out.println("PLEASE ENTER VALID INPUTS BEFORE CONNECTING.");
-//                if(cellNumber.length() != 10) {
-//                    //MAKE THE USER ENTER A VALID PHONE NUMBER
-//                    JFrame cellInvalidAlert = new JFrame();
-//                    cellInvalidAlert.setTitle("INVALID CELL NUMBER");
-//                    cellInvalidAlert.setSize(500, 300);
-//                    cellInvalidAlert.setLayout(new BorderLayout());
-//                    cellInvalidAlert.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-//                }
-//                if (inputLow < -10 || inputHigh > 63){
-//                    //MAKE THE USER ENTER VALID LOW RANGE TEMPERATURE
-//                }
-//                else
-//                {
-//                    //ONE OR MORE OF YOUR VALUES WERE ENTERED WRONG, MESSAGE
-//                }
-//                chosenPort.closePort();
-//                portList.setEnabled(true);
-//                connectButton.setText("Connect");
-//                //clear the data structure(s) holding data received from the ESP
-//                //series.clear();
-//            }
-//        });
+        javax.swing.SwingUtilities.invokeLater(new Runnable() {
 
-                /************************
-                 This begins the chart creation process.
-                 ***********************/
-                tChart = buildPanel();
+            @Override
+            public void run() {
 
-                javax.swing.SwingUtilities.invokeLater(new Runnable() {
+                // Create and set up the window.
+                JFrame frame = new JFrame("Temperature Sensor Data");
+                frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+                frame.add(topPanel, BorderLayout.NORTH);
+                frame.add(tChart);
 
-                    @Override
-                    public void run() {
-
-                        // Create and set up the window.
-                        JFrame frame = new JFrame("XChart");
-                        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-                        frame.add(topPanel, BorderLayout.NORTH);
-                        frame.add(tChart);
-
-                        // Display the window.
-                        frame.pack();
-                        frame.setVisible(true);
-                    }
-                });
-
-                // Show it
-//        sw = new SwingWrapper<XYChart>(chart);
-//        sw.displayChart();
-//
-//                mySwingWorker = new MySwingWorker();
-//                mySwingWorker.execute();
-//
-//            }
-//        });
+                // Display the window.
+                frame.pack();
+                frame.setVisible(true);
+            }
+        });
     }
+
     /*
     This class handles what happens when the connect button is pressed.
      */
@@ -300,37 +138,72 @@ public class TemperaturePanel {
             if (e.getSource() == readHigh) {
                 inputHigh = Integer.parseInt(readHigh.getText());
                 highTemp.setText(Integer.toString(inputHigh));
-            }
-            else if(e.getSource() == readLow){
+            } else if (e.getSource() == readLow) {
                 inputLow = Integer.parseInt(readLow.getText());
                 lowTemp.setText(Integer.toString(inputLow));
             }
         }
     }
+
     private class TmpButtonHandler implements ActionListener {
         public void actionPerformed(ActionEvent e) {
-            if (connectButton.getText().equals("Connect")) {
-                // attempt to connect to the serial port
+            if (e.getSource() == connectButton) {
+                if (connectButton.getText().equals("Connect")) {
+                    // attempt to connect to the serial port
+                    chosenPort = SerialPort.getCommPort(portList.getSelectedItem().toString());
+                    chosenPort.setComPortTimeouts(SerialPort.TIMEOUT_SCANNER, 0, 0);
+                    if (chosenPort.openPort()) {
+                        connectButton.setText("Disconnect");
+                        portList.setEnabled(false);
+                    }
 
-                chosenPort = SerialPort.getCommPort(portList.getSelectedItem().toString());
-                chosenPort.setComPortTimeouts(SerialPort.TIMEOUT_SCANNER, 0, 0);
-                if (chosenPort.openPort()) {
-                    connectButton.setText("Disconnect");
-                    portList.setEnabled(false);
+                    //////////////////////////////////////////////////////////
+                    try {
+                        Twilio.init(ACCOUNT_SID, AUTH_TOKEN);
+
+                        Message message = Message
+                                .creator(new PhoneNumber(readCellNumber.getText()), new PhoneNumber("+16182668109"), // To: , From: respectively
+                                        "Sensor connected.").create();
+
+                        System.out.println(message.getSid());
+                        //These are two very important lines of code, this is what basically allows for data acquisition
+                        //in the background.
+                        output = new PrintWriter(chosenPort.getOutputStream());
+                        mySwingWorker = new MySwingWorker();
+                        mySwingWorker.execute();
+                    }catch(TwilioException T){
+                        JOptionPane.showMessageDialog(null, T.getMessage(), "Error Sending Text Message", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else {
+                    if (chosenPort.isOpen()) {
+                        output.flush();
+                        output.close();
+                        chosenPort.closePort();
+                        connectButton.setText("Connect");
+                        mySwingWorker.cancel(true);
+                        portList.setEnabled(true);
+                    }
                 }
+            }
+            else if(e.getSource() == LEDButton){
+                if(LEDButton.getText().equals("LED ON")) {
+                    //turn the led off
+                    LEDButton.setText("LED OFF");
+                    output.print("t\n");
+                }
+                else {
+                    //turn the led on
+                    LEDButton.setText("LED ON");
+                    output.print("T\n");
+                }
+                output.flush();
 
-                //////////////////////////////////////////////////////////
-                Twilio.init(ACCOUNT_SID, AUTH_TOKEN);
-
-                Message message = Message
-                        .creator(new PhoneNumber(readCellNumber.getText()), new PhoneNumber("+16182668109"), // To: , From: respectively
-                                "Sensor connected.").create();
-
-                System.out.println(message.getSid());
-                //These are two very important lines of code, this is what basically allows for data acquisition
-                //in the background.
-                mySwingWorker = new MySwingWorker();
-                mySwingWorker.execute();
+            }
+            else if(e.getSource() == FButton){
+                if(fctemp == 'c'){
+                    fctemp = 'f';
+                    chart.setYAxisTitle("Temperature (" + fctemp + ")");
+                }
             }
         }
     }
@@ -341,14 +214,8 @@ public class TemperaturePanel {
     private class MySwingWorker extends SwingWorker<Boolean, double[]> {
 
         LinkedList<Double> fifo = new LinkedList<Double>();
-        //LinkedList<Double> fifoX = new LinkedList<Double>();
-
 
         public MySwingWorker() {
-
-            //fifo.add(-1.0);
-            //fifoX.add(0.0);
-
         }
 
         @Override
@@ -357,27 +224,35 @@ public class TemperaturePanel {
              * This function needs a lot of fine tuning and organization. It does work loosely,
              * but it could be structured much better.
              */
+            int counter = 10;
+            Scanner scanner = new Scanner(chosenPort.getInputStream());
             while (!isCancelled()) {
-                Scanner scanner = new Scanner(chosenPort.getInputStream());
+
                 int oneText = 0;
-                int startConn=0;
+                int startConn = 0;
+//                PrintWriter output = new PrintWriter(chosenPort.getOutputStream());
+//                counter += 0.5;
+//                output.print(counter);
+//                output.flush();
+                if (scanner.hasNextLine()) {
+                    //while (scanner.hasNextLine()) {
 
-                while(scanner.hasNextLine()) {
+                        try {
+//                            if (startConn == 0) {
+//                            PrintWriter output=new PrintWriter(chosenPort.getOutputStream());
+//                               output.print("40");
+//                                output.flush();
 
-                    try {
-                        if(startConn==0){
-                            PrintWriter output=new PrintWriter(chosenPort.getOutputStream());
-                            output.print('s');
-                            output.flush();
-                            //prepopulate
+
+//                        //prepopulate
 //                            for(int i=0; i<300; i++){
 //                                String line = scanner.nextLine();
 //                                Double number = Double.parseDouble(line);
 //                                fifo.add(number);
 //                                sensorData.remove();
 //                            }
-                            startConn=1;
-                        }
+//                                startConn = 1;
+//                            }
 
                         String line = scanner.nextLine();
                         double number = Double.parseDouble(line);
@@ -389,13 +264,13 @@ public class TemperaturePanel {
                             System.out.printf("readlow: %s\n", readLow.getText());
                             System.out.printf("readhigh: %s\n", readHigh.getText());
                             */
-                        if (number >= inputHigh && oneText == 0 && number <= 65){
+                        if (number >= inputHigh && oneText == 0 && number <= 65) {
                             Message message1 = Message
                                     .creator(new PhoneNumber(readCellNumber.getText()), new PhoneNumber("+16182668109"), // To: , From: respectively
                                             "WARNING: TEMPERATURE RANGE HAS EXCEEDED REQUIRED TEMPERATURE").create();
                             oneText++;
                         }
-                        if (number <= inputLow && oneText == 0 && number >= -20){
+                        if (number <= inputLow && oneText == 0 && number >= -20) {
                             Message message1 = Message
                                     .creator(new PhoneNumber(readCellNumber.getText()), new PhoneNumber("+16182668109"), // To: , From: respectively
                                             "WARNING: TEMPERATURE RANGE HAS FALLEN BELOW REQUIRED TEMPERATURE").create();
@@ -424,11 +299,11 @@ public class TemperaturePanel {
 //                            chart.setTitle("Unplugged Sensor");
 //                        }
 
-                        if(LEDButton.getModel().isPressed()){
-                            PrintWriter output=new PrintWriter(chosenPort.getOutputStream());
-                            output.print('o');
-                            output.flush();
-                        }
+//                    if (LEDButton.getModel().isPressed()) {
+//                        PrintWriter output = new PrintWriter(chosenPort.getOutputStream());
+//                        output.print('o');
+//                        output.flush();
+//                    }
 
 //                        for(int i=-0;i<300; i++){
 //                            double y=fifo.get(i);
@@ -447,6 +322,7 @@ public class TemperaturePanel {
                         If the data-set exceeds 300, this will remove the oldest element from the list.
                         This also serves to keep the maximum locked at 300 on the x-axis.
                          */
+                        //fifo.add(Math.random()-.5);
                         if (fifo.size() > 300) {
                             fifo.removeFirst();
                             //fifoX.removeFirst();
@@ -461,20 +337,23 @@ public class TemperaturePanel {
                         }
                         publish(array);
 
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            // eat it. caught when interrupt is called
-                            System.out.println("MySwingWorker shut down.");
-                        }
-
-                        //window.repaint();
-                    } catch(Exception e) {
+                    }catch(Exception e){
                     }
 
+                    }
+                //}
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    // eat it. caught when interrupt is called
+                    System.out.println("MySwingWorker shut down.");
                 }
-                scanner.close();
             }
+                scanner.close();
+            return true;
+        }
+
+        //}
 /*
     Use to reference random data input into graph for further debugging.
  */
@@ -501,8 +380,6 @@ public class TemperaturePanel {
 //                    System.out.println("MySwingWorker shut down.");
 //                }
 
-            return true;
-        }
 
         @Override
         protected void process(List<double[]> chunks) {
@@ -511,19 +388,17 @@ public class TemperaturePanel {
 
             double[] mostRecentDataSet = chunks.get(chunks.size() - 1);
             //double[] xData = chunks.get(chunks.size() - 1);
+//            if(mostRecentDataSet[mostRecentDataSet.length - 1] == -127){
+                chart.updateXYSeries("Sensor Data", null, mostRecentDataSet, null);
+                chart.setYAxisTitle("Temperature (" + fctemp + ")");
+                tChart.revalidate();
+                tChart.repaint();
 
-            /**TODO: Get the graph to plot points starting on the right and with the most recent value being 0 on the x-axis.
+//            }
+//            else {
 
-             */
-            if(chart.getStyler().getXAxisMin() == 300.0){
-                chart.getStyler().setXAxisMin(0.0);
-
-            }
-
-            //chart.getStyler().setXAxisMin(chart.getStyler().getXAxisMin()-1);
-            chart.updateXYSeries("randomWalk", null , mostRecentDataSet , null).setMarker(SeriesMarkers.CIRCLE);
-            tChart.revalidate();
-            tChart.repaint();
+                //chart.getStyler().setXAxisMin(chart.getStyler().getXAxisMin()-1);
+            //}
 
             long start = System.currentTimeMillis();
             long duration = System.currentTimeMillis() - start;
@@ -533,38 +408,42 @@ public class TemperaturePanel {
             } catch (InterruptedException e) {
             }
 
+
         }
     }
 
-    public XYChart getChart() {
-        chart = QuickChart.getChart("SwingWorker XChart Real-time Demo", "Time (s)", "Temperature", "randomWalk", new double[] { 0 }, new double[] { 0 });
-        Map<Double, Object> xMarkMap = new TreeMap<Double, Object>();
-        Map<Double, Object> yMarkMap = new TreeMap<Double, Object>();
+        public XYChart getChart() {
+            chart = QuickChart.getChart("Temperature Sensor Data", "Time (s)", "Temperature (" + fctemp + ")", "Sensor Data", new double[]{0}, new double[]{0});
+            chart.getStyler().setMarkerSize(1);
+            Map<Double, Object> xMarkMap = new TreeMap<Double, Object>();
+            Map<Double, Object> yMarkMap = new TreeMap<Double, Object>();
 
-        for(double i = 0; i <= 300; i+=50){
-            xMarkMap.put(i, Double.toString(300-i));
-        }
+            for (double i = 0; i <= 300; i += 25) {
+                    xMarkMap.put(i, Double.toString(300 - i));
+
+            }
 //        for(double i = 0; i <= 60; i+=10){
 //            yMarkMap.put(i, Double.toString(i));
 //        }
-        chart.setXAxisLabelOverrideMap(xMarkMap);
+            chart.setXAxisLabelOverrideMap(xMarkMap);
 //        chart.setYAxisLabelOverrideMap(yMarkMap);
-        chart.getStyler().setPlotContentSize(1);
-        chart.getStyler().setDecimalPattern("#0.0");
-        chart.getStyler().setAxisTickMarkLength(3);
-        //chart.getStyler().setXAxisMax(300.0);
-        chart.getStyler().setXAxisMin(300.0);
-//        chart.getStyler().setXAxisMax(30.0);
-        //chart.getStyler().setXAxisTickMarkSpacingHint(80);
-        chart.getStyler().setYAxisMin(0.0);
-        chart.getStyler().setYAxisMax(60.0);
-        chart.getStyler().setLegendVisible(true);
-        chart.getStyler().setPlotTicksMarksVisible(true);
+            chart.getStyler().setPlotContentSize(1);
+            chart.getStyler().setDecimalPattern("#0.0");
+            chart.getStyler().setAxisTickMarkLength(3);
+//            chart.getStyler().setXAxisMax(0.0);
+//            chart.getStyler().setXAxisMin(300.0);
+            chart.getStyler().setXAxisTickMarkSpacingHint(80);
+            chart.getStyler().setYAxisMin(10.0);
+            chart.getStyler().setYAxisMax(50.0);
+            chart.getStyler().setYAxisGroupPosition(0, Styler.YAxisPosition.Right);
+            chart.getStyler().setLegendVisible(true);
+            chart.getStyler().setPlotTicksMarksVisible(true);
 
-        return chart;
+            return chart;
+        }
+
+        public XChartPanel<XYChart> buildPanel() {
+            return new XChartPanel<XYChart>(getChart());
+        }
     }
 
-    public XChartPanel<XYChart> buildPanel(){
-        return new XChartPanel<XYChart>(getChart());
-    }
-}
