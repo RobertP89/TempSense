@@ -168,18 +168,27 @@ public class TemperaturePanel {
                         System.out.println(message.getSid());
                         //These are two very important lines of code, this is what basically allows for data acquisition
                         //in the background.
+//                        mySwingWorker = new MySwingWorker();
+//                        mySwingWorker.execute();
                         output = new PrintWriter(chosenPort.getOutputStream());
-                        mySwingWorker = new MySwingWorker();
-                        mySwingWorker.execute();
+
                     }catch(TwilioException T){
-                        JOptionPane.showMessageDialog(null, T.getMessage(), "Error Sending Text Message", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(null, T.getMessage(), "Error Sending Text Message.", JOptionPane.ERROR_MESSAGE);
+                    }
+                    catch(NullPointerException N){
+                        JOptionPane.showMessageDialog(null, N.getCause(), "The device on this port is rejecting data acquisition.", JOptionPane.ERROR_MESSAGE);
                     }
                 } else {
+                    //Check if the port is still open, if it is proceed to close it gracefully
                     if (chosenPort.isOpen()) {
+                        //flush any data still in the output buffer
                         output.flush();
+                        //close the output buffer
                         output.close();
+                        //close/disconnected from the COM port
                         chosenPort.closePort();
                         connectButton.setText("Connect");
+                        //stop graphing and trying to acquire data
                         mySwingWorker.cancel(true);
                         portList.setEnabled(true);
                     }
@@ -209,50 +218,38 @@ public class TemperaturePanel {
     }
 
     /*
-    This class handles all data acquisition and creation of the actual graph.
+    This class handles all data acquisition and creation of the actual graph. This class runs in a separate
+    thread independent of the GUI so that the GUI can still respond.
      */
     private class MySwingWorker extends SwingWorker<Boolean, double[]> {
 
+        //holds all received data that is to be plotted in the graph
         LinkedList<Double> fifo = new LinkedList<Double>();
 
         public MySwingWorker() {
         }
 
+        /*
+        This function is responsible for the acquisition and processing of incoming data from
+        a connected temperature probe either via Bluetooth, or a connected COM port of some design.
+        A scanner is created for the purpose of processing incoming data from the COM port selected
+        by the user.
+
+        Upon receiving data that either exceeds the maximum safe temperature, or falls below the minimum
+        safety temperature; a text message will be sent to a specified phone number. This message is sent
+        sent through a service named Twilio.
+         */
         @Override
         protected Boolean doInBackground() throws Exception {
-            /**
-             * This function needs a lot of fine tuning and organization. It does work loosely,
-             * but it could be structured much better.
-             */
-            int counter = 10;
+
+            int oneText = 0;
             Scanner scanner = new Scanner(chosenPort.getInputStream());
             while (!isCancelled()) {
 
-                int oneText = 0;
-                int startConn = 0;
-//                PrintWriter output = new PrintWriter(chosenPort.getOutputStream());
-//                counter += 0.5;
-//                output.print(counter);
-//                output.flush();
+
+
                 if (scanner.hasNextLine()) {
-                    //while (scanner.hasNextLine()) {
-
                         try {
-//                            if (startConn == 0) {
-//                            PrintWriter output=new PrintWriter(chosenPort.getOutputStream());
-//                               output.print("40");
-//                                output.flush();
-
-
-//                        //prepopulate
-//                            for(int i=0; i<300; i++){
-//                                String line = scanner.nextLine();
-//                                Double number = Double.parseDouble(line);
-//                                fifo.add(number);
-//                                sensorData.remove();
-//                            }
-//                                startConn = 1;
-//                            }
 
                         String line = scanner.nextLine();
                         double number = Double.parseDouble(line);
@@ -341,6 +338,23 @@ public class TemperaturePanel {
                     }
 
                     }
+                    /*
+                    This code is for generating random data for testing purposes.
+                     */
+                    else{
+
+                    fifo.add(25 + Math.abs(Math.random() - .5));
+                    if (fifo.size() > 300) {
+                        fifo.removeFirst();
+                    }
+                    double[] array = new double[fifo.size()];
+
+                        for (int i = 0; i < fifo.size(); i++) {
+                            array[i] = fifo.get(i);
+                        }
+                        publish(array);
+                    }
+                }
                 //}
                 try {
                     Thread.sleep(1000);
@@ -348,10 +362,9 @@ public class TemperaturePanel {
                     // eat it. caught when interrupt is called
                     System.out.println("MySwingWorker shut down.");
                 }
-            }
                 scanner.close();
-            return true;
-        }
+                return true;
+            }
 
         //}
 /*
@@ -381,24 +394,32 @@ public class TemperaturePanel {
 //                }
 
 
+        /*
+        This function is responsible for processing intermediate data that has been pushed for publishing on the
+        thread. The data that has been passed over is used to update the existing series being plotted on the graph.
+        This is accomplished through the updateXYSeries method that belong to the XYChart object chart.
+
+        No x-data needs to be passed for the graph to be updated. This allows for the graph to resize up to a maximum
+        value as specified in the function getChart(). The values on the x-axis could be dynamic and every changing but
+        have been replaced with a custom mapping in the getChart() function.
+         */
         @Override
         protected void process(List<double[]> chunks) {
 
             System.out.println("number of chunks: " + chunks.size());
 
+            //get the data to be plotted, this is only the y-data
             double[] mostRecentDataSet = chunks.get(chunks.size() - 1);
-            //double[] xData = chunks.get(chunks.size() - 1);
-//            if(mostRecentDataSet[mostRecentDataSet.length - 1] == -127){
+
+            /*the x-data can be null due to XChart API functionality
+            For each y data point, an accompanying x data point is plotted
+            this x data point is calculated based on how long in-between y data points are plotted
+            if it takes 200 ms to plot a y data point consistently, the x data points will show as
+            0.2, 0.4,0.6, and so on as a result.*/
                 chart.updateXYSeries("Sensor Data", null, mostRecentDataSet, null);
                 chart.setYAxisTitle("Temperature (" + fctemp + ")");
                 tChart.revalidate();
                 tChart.repaint();
-
-//            }
-//            else {
-
-                //chart.getStyler().setXAxisMin(chart.getStyler().getXAxisMin()-1);
-            //}
 
             long start = System.currentTimeMillis();
             long duration = System.currentTimeMillis() - start;
@@ -412,26 +433,29 @@ public class TemperaturePanel {
         }
     }
 
+    /*
+    This function will build and create the XYChart object that will display plotted data that is acquired
+    in the doInBackground function and passed to the process() function. This function merely serves to
+    setup the chart with a custom design.
+     */
         public XYChart getChart() {
             chart = QuickChart.getChart("Temperature Sensor Data", "Time (s)", "Temperature (" + fctemp + ")", "Sensor Data", new double[]{0}, new double[]{0});
             chart.getStyler().setMarkerSize(1);
             Map<Double, Object> xMarkMap = new TreeMap<Double, Object>();
-            Map<Double, Object> yMarkMap = new TreeMap<Double, Object>();
 
+            //create a custom map that will display the x-axis from left to right as follow
+            // 300, 275, 250, 225, ..., 0 with 0 being the most recent data point
             for (double i = 0; i <= 300; i += 25) {
                     xMarkMap.put(i, Double.toString(300 - i));
 
             }
-//        for(double i = 0; i <= 60; i+=10){
-//            yMarkMap.put(i, Double.toString(i));
-//        }
+
             chart.setXAxisLabelOverrideMap(xMarkMap);
-//        chart.setYAxisLabelOverrideMap(yMarkMap);
             chart.getStyler().setPlotContentSize(1);
             chart.getStyler().setDecimalPattern("#0.0");
             chart.getStyler().setAxisTickMarkLength(3);
-//            chart.getStyler().setXAxisMax(0.0);
-//            chart.getStyler().setXAxisMin(300.0);
+            chart.getStyler().setXAxisMax(0.0);
+            //chart.getStyler().setXAxisMin(300.0);
             chart.getStyler().setXAxisTickMarkSpacingHint(80);
             chart.getStyler().setYAxisMin(10.0);
             chart.getStyler().setYAxisMax(50.0);
