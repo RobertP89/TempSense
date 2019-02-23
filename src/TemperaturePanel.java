@@ -126,8 +126,11 @@ public class TemperaturePanel {
                 // Display the window.
                 frame.pack();
                 frame.setVisible(true);
+
             }
         });
+        mySwingWorker = new MySwingWorker();
+        mySwingWorker.execute();
     }
 
     /*
@@ -338,24 +341,8 @@ public class TemperaturePanel {
                     }
 
                     }
-                    /*
-                    This code is for generating random data for testing purposes.
-                     */
-                    else{
-
-                    fifo.add(25 + Math.abs(Math.random() - .5));
-                    if (fifo.size() > 300) {
-                        fifo.removeFirst();
-                    }
-                    double[] array = new double[fifo.size()];
-
-                        for (int i = 0; i < fifo.size(); i++) {
-                            array[i] = fifo.get(i);
-                        }
-                        publish(array);
-                    }
                 }
-                //}
+
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
@@ -365,8 +352,6 @@ public class TemperaturePanel {
                 scanner.close();
                 return true;
             }
-
-        //}
 /*
     Use to reference random data input into graph for further debugging.
  */
@@ -454,8 +439,8 @@ public class TemperaturePanel {
             chart.getStyler().setPlotContentSize(1);
             chart.getStyler().setDecimalPattern("#0.0");
             chart.getStyler().setAxisTickMarkLength(3);
-            chart.getStyler().setXAxisMax(0.0);
-            //chart.getStyler().setXAxisMin(300.0);
+            chart.getStyler().setXAxisMax(300.0);
+            //chart.getStyler().setXAxisMin(0.0);
             chart.getStyler().setXAxisTickMarkSpacingHint(80);
             chart.getStyler().setYAxisMin(10.0);
             chart.getStyler().setYAxisMax(50.0);
